@@ -26,11 +26,20 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.SystemClock;
 import android.support.v7.app.AppCompatActivity;
+import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.view.Display;
 import android.view.WindowManager;
 import android.view.Surface;
+
+import android.widget.Button;
+import android.widget.Toast;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -42,6 +51,8 @@ import java.util.Vector;
 
 public class MainActivity extends AppCompatActivity
         implements SensorEventListener {
+
+    Button simpanDonk;
 
     // System sensor manager instance.
     private SensorManager mSensorManager;
@@ -64,8 +75,14 @@ public class MainActivity extends AppCompatActivity
     private ImageView mSpotLeft;
     private ImageView mSpotRight;
 
+    private TextView dataGet1;
+    private TextView dataGet2;
+    private TextView dataGet3;
     private Display mDisplay;
+
     private Vector<String> mDataLog;
+
+
 
 
     // Very small values for the accelerometer (on all three axes) should
@@ -80,10 +97,43 @@ public class MainActivity extends AppCompatActivity
 
         // Lock the orientation to portrait (for now)
 //        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-
+        simpanDonk = findViewById(R.id.button2);
+        dataGet1 = (TextView) findViewById(R.id.label_azimuth);
+        dataGet2 = (TextView) findViewById(R.id.label_pitch);
+        dataGet3 = (TextView) findViewById(R.id.label_roll);
         mTextSensorAzimuth = (TextView) findViewById(R.id.value_azimuth);
         mTextSensorPitch = (TextView) findViewById(R.id.value_pitch);
         mTextSensorRoll = (TextView) findViewById(R.id.value_roll);
+        mSpotTop = (ImageView) findViewById(R.id.spot_top);
+        mSpotLeft = (ImageView) findViewById(R.id.spot_left);
+        mSpotRight = (ImageView) findViewById(R.id.spot_right);
+        mSpotBottom = (ImageView) findViewById(R.id.spot_bottom);
+
+        simpanDonk.setOnClickListener((view) -> {
+            if (!mTextSensorAzimuth.getText().toString().isEmpty()){
+                File file = new File(MainActivity.this.getFilesDir(), "text");
+                if (!file.exists()){
+                    file.mkdir();
+                }
+                try{
+                    File catatan = new File(file, "catatan");
+                    FileWriter writer = new FileWriter(catatan);
+                    writer.append(dataGet1.getText().toString() + "\t");
+                    writer.append(mTextSensorAzimuth.getText().toString() + "\n");
+                    writer.append(dataGet2.getText().toString() + "\t");
+                    writer.append(mTextSensorPitch.getText().toString() + "\n");
+                    writer.append(dataGet3.getText().toString() + "\t");
+                    writer.append(mTextSensorRoll.getText().toString() + "\n");
+                    writer.flush();
+                    writer.close();
+
+                    Toast.makeText(MainActivity.this, "sukses",Toast.LENGTH_LONG).show();
+                }catch (Exception e){
+
+                }
+            }
+        } );
+
 
         // Get accelerometer and magnetometer sensors from the sensor manager.
         // The getDefaultSensor() method returns null if the sensor
@@ -95,18 +145,30 @@ public class MainActivity extends AppCompatActivity
         mSensorMagnetometer = mSensorManager.getDefaultSensor(
                 Sensor.TYPE_MAGNETIC_FIELD);
 
-        mSpotTop = (ImageView) findViewById(R.id.spot_top);
-        mSpotBottom = (ImageView) findViewById(R.id.spot_bottom);
-        mSpotLeft = (ImageView) findViewById(R.id.spot_left);
-        mSpotRight = (ImageView) findViewById(R.id.spot_right);
 
         WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         mDisplay = wm.getDefaultDisplay();
 
-        mDataLog = new Vector<String>(100);
-        Thread myThread = new Thread(new WriteThread());
-        myThread.start();
+        //mDataLog = new Vector<String>(100);
+        //Thread myThread = new Thread(new WriteThread());
+        //myThread.start();
 
+    }
+    private String readFIle() {
+        File fileEvents = new File(MainActivity.this.getFilesDir() + "/text/sample");
+        StringBuilder text = new StringBuilder();
+        try {
+            BufferedReader br = new BufferedReader(new FileReader(fileEvents));
+            String line;
+            while ((line = br.readLine()) != null) {
+                text.append(line);
+                text.append(' ');
+            }
+            br.close();
+        } catch (IOException e) {
+        }
+        String result = text.toString();
+        return result;
     }
 
     /**
@@ -192,17 +254,12 @@ public class MainActivity extends AppCompatActivity
         float pitch = orientationValues[1];
         float roll = orientationValues[2];
 
-        JSONObject j = new JSONObject();
-        try {
-            j.put("azimuth", azimuth);
-            j.put("pitch", pitch);
-            j.put("roll", roll);
-            j.put("timestamps", System.currentTimeMillis() / 1000);
-        } catch (JSONException e) {
-            throw new RuntimeException(e);
+        if (Math.abs(pitch) < VALUE_DRIFT) {
+            pitch = 0;
         }
-
-        mDataLog.add(j.toString());
+        if (Math.abs(roll) < VALUE_DRIFT) {
+            roll = 0;
+        }
 
         mTextSensorAzimuth.setText(getResources().getString(
                 R.string.value_format, azimuth));
@@ -211,14 +268,8 @@ public class MainActivity extends AppCompatActivity
         mTextSensorRoll.setText(getResources().getString(
                 R.string.value_format, roll));
 
-
-        if (Math.abs(pitch) < VALUE_DRIFT) {
-            pitch = 0;
-        }
-        if (Math.abs(roll) < VALUE_DRIFT) {
-            roll = 0;
-        }
-
+        // Reset all spot values to 0. Without this animation artifacts can
+        // happen with fast tilts.
         mSpotTop.setAlpha(0f);
         mSpotBottom.setAlpha(0f);
         mSpotLeft.setAlpha(0f);
@@ -241,56 +292,7 @@ public class MainActivity extends AppCompatActivity
      * unused in this app.
      */
     @Override
-    public void onAccuracyChanged(Sensor sensor, int i) {
+    public void onAccuracyChanged(Sensor sensor, int i){
+
     }
-
-    public void appendLog(String text)
-    {
-        File logFile = new File(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS).getAbsoluteFile()+"/TiltSpot.txt");
-
-        System.out.println(text);
-        if (!logFile.exists())
-        {
-            try
-            {
-                logFile.createNewFile();
-            }
-            catch (IOException e)
-            {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
-        }
-
-        try
-        {
-            //BufferedWriter for performance, true to set append to file flag
-            BufferedWriter buf = new BufferedWriter(new FileWriter(logFile, true));
-            buf.append(text);
-            buf.newLine();
-            buf.close();
-        }
-        catch (IOException e)
-        {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-    }
-
-    class WriteThread implements Runnable {
-        @Override
-        public void run() {
-            while (true) {
-                if (mDataLog.size() > 0) {
-                    SystemClock.sleep(10);
-                    appendLog(mDataLog.firstElement());
-                    mDataLog.remove(0);
-                }
-                else {
-                    SystemClock.sleep(100);
-                }
-            }
-        }
-    }
-
 }
